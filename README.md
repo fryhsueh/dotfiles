@@ -3,7 +3,7 @@
 **Clone the repository:**
    First, download these dotfiles to your home directory on the new machine:
    ```bash
-   git clone [https://github.com/fryhsueh/dotfiles.git](https://github.com/fryhsueh/dotfiles.git) ~/.dotfiles
+   git clone https://github.com/fryhsueh/dotfiles.git ~/.dotfiles
    ```
 **
 Run the following command to link the Neovim configuration to your system:
