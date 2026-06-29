@@ -18,3 +18,18 @@ vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "Written"})
 vim.opt.number = true
 -- Share the Windows clipboard
 vim.opt.clipboard = "unnamedplus"
+
+-- Better window navigation
+vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Jump to left window" })
+vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Jump to lower window" })
+vim.keymap.set("n", "<C-k>", "<C-w>k", { desc = "Jump to upper window" })
+vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Jump to right window" })
+
+-- Terminal mode window navigation
+vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-w>h", { desc = "Jump to left window from terminal" })
+vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-w>j", { desc = "Jump to lower window from terminal" })
+vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Jump to upper window from terminal" })
+vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-w>l", { desc = "Jump to right window from terminal" })
+
+-- Press Esc twice to exit Terminal Mode
+vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
