@@ -31,5 +31,14 @@ vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-w>j", { desc = "Jump to lower window
 vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Jump to upper window from terminal" })
 vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-w>l", { desc = "Jump to right window from terminal" })
 
+-- Automatically enter Insert mode when focusing a terminal buffer
+vim.api.nvim_create_autocmd({ "TermOpen", "BufEnter" }, {
+    pattern = "term://*",
+    callback = function()
+        vim.cmd("startinsert")
+    end,
+    desc = "Auto-enter Insert mode in terminal buffers",
+})
+
 -- Press Esc twice to exit Terminal Mode
 vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
