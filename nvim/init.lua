@@ -9,7 +9,7 @@ vim.keymap.set("n", "<leader>p", '"+p', { desc = "Paste from system clipboard" }
 vim.keymap.set("v", "<leader>p", '"+p', { desc = "Paste from system clipboard" })
 
 -- Insert mode: Paste over highlighted text
-vim.keymap.set("i", "<leader>p", '<C-r>+', { desc = "Paste from system clipboard" })
+--vim.keymap.set("i", "<leader>p", '<C-r>+', { desc = "Paste from system clipboard" })
 
 vim.keymap.set("i", "jk", "<C-c>", { desc = "Escape"})
 
