@@ -1,5 +1,3 @@
-print("advent of neovim")
-print("the second line")
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 -- Normal mode: Paste after cursor
