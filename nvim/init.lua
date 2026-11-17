@@ -12,31 +12,36 @@ vim.keymap.set("v", "<leader>p", '"+p', { desc = "Paste from system clipboard" }
 vim.keymap.set("i", "jk", "<C-c>", { desc = "Escape"})
 
 vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "Written"})
+vim.keymap.set("n", "<leader>z", ":e!<CR>", { desc = "Restore"})
+
 -- Display line number
 vim.opt.number = true
 -- Share the Windows clipboard
 vim.opt.clipboard = "unnamedplus"
 
--- Better window navigation
-vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Jump to left window" })
-vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Jump to lower window" })
-vim.keymap.set("n", "<C-k>", "<C-w>k", { desc = "Jump to upper window" })
-vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Jump to right window" })
+local run_buf = nil
+vim.keymap.set("n", "<leader>r", function()
+  vim.cmd("update")
+  if run_buf and vim.api.nvim_buf_is_valid(run_buf) then
+    vim.api.nvim_buf_delete(run_buf, { force = true })
+  end
 
--- Terminal mode window navigation
-vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-w>h", { desc = "Jump to left window from terminal" })
-vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-w>j", { desc = "Jump to lower window from terminal" })
-vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-w>k", { desc = "Jump to upper window from terminal" })
-vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-w>l", { desc = "Jump to right window from terminal" })
+  local file = vim.fn.expand("%:p")
 
--- Automatically enter Insert mode when focusing a terminal buffer
-vim.api.nvim_create_autocmd({ "TermOpen", "BufEnter" }, {
-    pattern = "term://*",
-    callback = function()
-        vim.cmd("startinsert")
-    end,
-    desc = "Auto-enter Insert mode in terminal buffers",
-})
+  -- 1. Create the buffer and bind 'q' BEFORE starting Python
+  run_buf = vim.api.nvim_create_buf(false, true)
+  vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = run_buf, silent = true })
 
--- Press Esc twice to exit Terminal Mode
-vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
+  -- 2. Open the bottom split and display the buffer
+  vim.cmd("botright 12split")
+  vim.api.nvim_win_set_buf(0, run_buf)
+
+  -- 3. Start Python directly inside this buffer
+  local cmd = { "python3", file }
+  if vim.fn.has("nvim-0.11") == 1 then
+    vim.fn.jobstart(cmd, { term = true })
+  else
+    vim.fn.termopen(cmd)
+  end
+
+end, { desc = "Run Python file in a fresh split" })
