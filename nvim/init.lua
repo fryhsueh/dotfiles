@@ -26,7 +26,8 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- 3. Initialize lazy.nvim and declare plugins
+-- 3. Check system dependencies for a fresh machine setup
+-- Tree-sitter needs 'gcc' to compile syntax parsers
 if vim.fn.executable("gcc") == 0 then
   vim.schedule(function()
     vim.notify(
@@ -36,8 +37,19 @@ if vim.fn.executable("gcc") == 0 then
   end)
 end
 
+-- Mason needs 'npm' and 'unzip' to download and install pyright automatically
+if vim.fn.executable("node") == 0 or vim.fn.executable("npm") == 0 or vim.fn.executable("unzip") == 0 then
+  vim.schedule(function()
+    vim.notify(
+      "npm/unzip not found: run 'sudo apt install nodejs npm unzip' in your terminal for Mason/pyright.",
+      vim.log.levels.WARN
+    )
+  end)
+end
+
+-- 4. Initialize lazy.nvim and declare plugins
 require("lazy").setup({
-spec = {
+  spec = {
     {
       "nvim-treesitter/nvim-treesitter",
       branch = "master",
@@ -46,7 +58,7 @@ spec = {
         require("nvim-treesitter.configs").setup({
           ensure_installed = { "lua", "python", "vim", "vimdoc", "query" },
           highlight = { enable = true },
-	  indent = { enable = true }, -- Enables Tree-sitter indentation rules
+          indent = { enable = true }, -- Enables Tree-sitter indentation rules
         })
       end,
     },
@@ -58,12 +70,57 @@ spec = {
         vim.cmd.colorscheme("tokyonight-night")
       end,
     },
+    {
+      "windwp/nvim-autopairs",
+      event = "InsertEnter", -- Loads automatically the first time you enter Insert mode
+      config = function()
+        require("nvim-autopairs").setup({
+          check_ts = true, -- Uses your nvim-treesitter parsers for smarter pairing
+        })
+      end,
+    },
+    {
+      -- Python Language Server (LSP) setup for code navigation (gd) and docs (K)
+      "neovim/nvim-lspconfig",
+      dependencies = {
+        "williamboman/mason.nvim",           -- Tool installer ("App Store" for LSPs)
+        "williamboman/mason-lspconfig.nvim", -- Bridges Mason and lspconfig
+      },
+      config = function()
+        -- Step A: Initialize Mason and auto-install pyright in ~/.local/share/nvim/mason
+        require("mason").setup()
+        require("mason-lspconfig").setup({
+          ensure_installed = { "pyright" },
+        })
+
+        -- Step B: Create shortcuts ONLY when an LSP attaches to the current file
+        -- Tip: After jumping with 'gd', press 'Ctrl + o' to jump back to where you were!
+        vim.api.nvim_create_autocmd("LspAttach", {
+          callback = function(event)
+            local opts = { buffer = event.buf }
+            -- Jump to where a class/function is defined (even inside .venv!)
+            vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+            -- Show popup documentation for the word under the cursor
+            vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+            -- Show error details if a line has a warning/error
+            vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float, opts)
+          end,
+        })
+
+        -- Step C: Start pyright (compatible with both Neovim 0.11+ and older versions)
+        if vim.fn.has("nvim-0.11") == 1 then
+          vim.lsp.enable("pyright")
+        else
+          require("lspconfig").pyright.setup({})
+        end
+      end,
+    },
   },
   checker = { enabled = false },
 })
 
 -- =========================================================================
--- Keep all of your existing settings and <leader>r Python runner below here
+-- Personal settings, keymaps, and <leader>r Python runner
 -- =========================================================================
 
 -- Normal mode: Paste after cursor
@@ -75,10 +132,10 @@ vim.keymap.set("v", "<leader>p", '"+p', { desc = "Paste from system clipboard" }
 -- Insert mode: Paste over highlighted text
 --vim.keymap.set("i", "<leader>p", '<C-r>+', { desc = "Paste from system clipboard" })
 
-vim.keymap.set("i", "jk", "<C-c>", { desc = "Escape"})
+vim.keymap.set("i", "jk", "<C-c>", { desc = "Escape" })
 
-vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "Written"})
-vim.keymap.set("n", "<leader>z", ":e!<CR>", { desc = "Restore"})
+vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "Written" })
+vim.keymap.set("n", "<leader>z", ":e!<CR>", { desc = "Restore" })
 
 -- Display line number
 vim.opt.number = true
@@ -109,5 +166,4 @@ vim.keymap.set("n", "<leader>r", function()
   else
     vim.fn.termopen(cmd)
   end
-
 end, { desc = "Run Python file in a fresh split" })
