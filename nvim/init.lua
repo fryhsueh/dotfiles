@@ -27,12 +27,39 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 -- 3. Initialize lazy.nvim and declare plugins
+if vim.fn.executable("gcc") == 0 then
+  vim.schedule(function()
+    vim.notify(
+      "gcc not found: run 'sudo apt install build-essential' in your terminal for Tree-sitter.",
+      vim.log.levels.WARN
+    )
+  end)
+end
+
 require("lazy").setup({
-  spec = {
-    -- Add plugins here as Lua tables, for example:
-    -- { "folke/tokyonight.nvim", lazy = false, priority = 1000, config = function() vim.cmd.colorscheme("tokyonight") end },
+spec = {
+    {
+      "nvim-treesitter/nvim-treesitter",
+      branch = "master",
+      build = ":TSUpdate",
+      config = function()
+        require("nvim-treesitter.configs").setup({
+          ensure_installed = { "lua", "python", "vim", "vimdoc", "query" },
+          highlight = { enable = true },
+	  indent = { enable = true }, -- Enables Tree-sitter indentation rules
+        })
+      end,
+    },
+    {
+      "folke/tokyonight.nvim",
+      lazy = false,    -- Load immediately at startup so the UI doesn't flash default colors
+      priority = 1000, -- Load before all other plugins so they inherit this theme's colors
+      config = function()
+        vim.cmd.colorscheme("tokyonight-night")
+      end,
+    },
   },
-  checker = { enabled = false }, -- Change to true to check for updates automatically
+  checker = { enabled = false },
 })
 
 -- =========================================================================
