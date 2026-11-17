@@ -1,5 +1,44 @@
+-- 1. Set leader keys BEFORE loading lazy.nvim so plugin keymaps bind properly
 vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+vim.g.maplocalleader = "\\"
+
+-- 2. Bootstrap lazy.nvim (clones from GitHub automatically if missing)
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  local lazyrepo = "https://github.com/folke/lazy.nvim.git"
+  local out = vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "--branch=stable",
+    lazyrepo,
+    lazypath,
+  })
+  if vim.v.shell_error ~= 0 then
+    vim.api.nvim_echo({
+      { "Failed to clone lazy.nvim:\n", "ErrorMsg" },
+      { out, "WarningMsg" },
+      { "\nPress any key to exit..." },
+    }, true, {})
+    vim.fn.getchar()
+    os.exit(1)
+  end
+end
+vim.opt.rtp:prepend(lazypath)
+
+-- 3. Initialize lazy.nvim and declare plugins
+require("lazy").setup({
+  spec = {
+    -- Add plugins here as Lua tables, for example:
+    -- { "folke/tokyonight.nvim", lazy = false, priority = 1000, config = function() vim.cmd.colorscheme("tokyonight") end },
+  },
+  checker = { enabled = false }, -- Change to true to check for updates automatically
+})
+
+-- =========================================================================
+-- Keep all of your existing settings and <leader>r Python runner below here
+-- =========================================================================
+
 -- Normal mode: Paste after cursor
 vim.keymap.set("n", "<leader>p", '"+p', { desc = "Paste from system clipboard" })
 
