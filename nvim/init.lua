@@ -1,3 +1,7 @@
+-- Prerequisites (Ubuntu / WSL2):
+--   sudo apt update && sudo apt install -y build-essential unzip curl nodejs npm ripgrep
+--   mkdir -p ~/.config && ln -sfn ~/.dotfiles/nvim ~/.config/nvim
+
 -- 1. Set leader keys BEFORE loading lazy.nvim so plugin keymaps bind properly
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
@@ -26,88 +30,78 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- 3. Check system dependencies for a fresh machine setup
--- Tree-sitter needs 'gcc' to compile syntax parsers
-if vim.fn.executable("gcc") == 0 then
-  vim.schedule(function()
-    vim.notify(
-      "gcc not found: run 'sudo apt install build-essential' in your terminal for Tree-sitter.",
-      vim.log.levels.WARN
-    )
-  end)
+-- Helper: reusable C compiler check for both Tree-sitter and startup diagnostics
+local function has_c_compiler()
+  return vim.fn.executable("gcc") == 1
+    or vim.fn.executable("clang") == 1
+    or vim.fn.executable("cc") == 1
 end
 
--- Mason needs 'npm' and 'unzip' to download and install pyright automatically
-if vim.fn.executable("node") == 0 or vim.fn.executable("npm") == 0 or vim.fn.executable("unzip") == 0 then
-  vim.schedule(function()
-    vim.notify(
-      "npm/unzip not found: run 'sudo apt install nodejs npm unzip' in your terminal for Mason/pyright.",
-      vim.log.levels.WARN
-    )
-  end)
-end
-
--- 4. Initialize lazy.nvim and declare plugins
+-- 3. Initialize lazy.nvim and declare plugins
 require("lazy").setup({
   spec = {
+    {
+      "folke/snacks.nvim",
+      priority = 1000,
+      lazy = false,
+      opts = {
+        notifier = { enabled = true, timeout = 5000 },
+      },
+      keys = {
+        { "<leader>un", function() Snacks.notifier.show_history() end, desc = "Notification History" },
+      },
+    },
     {
       "nvim-treesitter/nvim-treesitter",
       branch = "master",
       build = ":TSUpdate",
       config = function()
         require("nvim-treesitter.configs").setup({
-          ensure_installed = { "lua", "python", "vim", "vimdoc", "query" },
+          ensure_installed = has_c_compiler() and { "lua", "python", "vim", "vimdoc", "query" } or {},
           highlight = { enable = true },
-          indent = { enable = true }, -- Enables Tree-sitter indentation rules
+          indent = { enable = true },
         })
       end,
     },
     {
       "folke/tokyonight.nvim",
-      lazy = false,    -- Load immediately at startup so the UI doesn't flash default colors
-      priority = 1000, -- Load before all other plugins so they inherit this theme's colors
+      lazy = false,
+      priority = 1000,
       config = function()
         vim.cmd.colorscheme("tokyonight-night")
       end,
     },
     {
       "windwp/nvim-autopairs",
-      event = "InsertEnter", -- Loads automatically the first time you enter Insert mode
+      event = "InsertEnter",
       config = function()
         require("nvim-autopairs").setup({
-          check_ts = true, -- Uses your nvim-treesitter parsers for smarter pairing
+          check_ts = true,
         })
       end,
     },
     {
-      -- Python Language Server (LSP) setup for code navigation (gd) and docs (K)
       "neovim/nvim-lspconfig",
       dependencies = {
-        "williamboman/mason.nvim",           -- Tool installer ("App Store" for LSPs)
-        "williamboman/mason-lspconfig.nvim", -- Bridges Mason and lspconfig
+        "williamboman/mason.nvim",
+        "williamboman/mason-lspconfig.nvim",
       },
       config = function()
-        -- Step A: Initialize Mason and auto-install pyright in ~/.local/share/nvim/mason
         require("mason").setup()
+        local has_node_npm = vim.fn.executable("node") == 1 and vim.fn.executable("npm") == 1
         require("mason-lspconfig").setup({
-          ensure_installed = { "pyright" },
+          ensure_installed = has_node_npm and { "pyright" } or {},
         })
 
-        -- Step B: Create shortcuts ONLY when an LSP attaches to the current file
-        -- Tip: After jumping with 'gd', press 'Ctrl + o' to jump back to where you were!
         vim.api.nvim_create_autocmd("LspAttach", {
           callback = function(event)
             local opts = { buffer = event.buf }
-            -- Jump to where a class/function is defined (even inside .venv!)
             vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
-            -- Show popup documentation for the word under the cursor
             vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
-            -- Show error details if a line has a warning/error
             vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float, opts)
           end,
         })
 
-        -- Step C: Start pyright (compatible with both Neovim 0.11+ and older versions)
         if vim.fn.has("nvim-0.11") == 1 then
           vim.lsp.enable("pyright")
         else
@@ -115,81 +109,125 @@ require("lazy").setup({
         end
       end,
     },
-		
-{
-  "folke/persistence.nvim",
-  event = "BufReadPre",
-  opts = {},
-  keys = {
-    { "<leader>qs", function() require("persistence").load() end, desc = "Restore Current Dir Session" },
-    { "<leader>qS", function() require("persistence").select() end, desc = "Select Any Saved Session" },
-    { "<leader>ql", function() require("persistence").load({ last = true }) end, desc = "Restore Last Session" },
-  },
-},
+    {
+      "folke/persistence.nvim",
+      event = { "BufReadPre", "SessionLoadPost" },
+      opts = {},
+      keys = {
+        { "<leader>qs", function() require("persistence").load() end, desc = "Restore Current Dir Session" },
+        { "<leader>qS", function() require("persistence").select() end, desc = "Select Any Saved Session" },
+        { "<leader>ql", function() require("persistence").load({ last = true }) end, desc = "Restore Last Session" },
+      },
+    },
   },
   checker = { enabled = false },
 })
 
+-- 4. Check system dependencies for a fresh machine setup
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    local missing_pkgs = {}
+    local details = {}
+
+    if not has_c_compiler() then
+      table.insert(missing_pkgs, "build-essential")
+      table.insert(details, "- gcc (required by nvim-treesitter to compile parsers)")
+    end
+    if vim.fn.executable("node") == 0 or vim.fn.executable("npm") == 0 then
+      table.insert(missing_pkgs, "nodejs npm")
+      table.insert(details, "- node/npm (required by Mason to install pyright)")
+    end
+    if vim.fn.executable("unzip") == 0 then
+      table.insert(missing_pkgs, "unzip")
+      table.insert(details, "- unzip (required by Mason to extract packages)")
+    end
+
+    if #missing_pkgs > 0 then
+      local msg = table.concat({
+        "Missing system tools:",
+        table.concat(details, "\n"),
+        "",
+        "Run in terminal:",
+        "sudo apt update && sudo apt install -y " .. table.concat(missing_pkgs, " "),
+      }, "\n")
+
+      vim.notify(msg, vim.log.levels.ERROR, {
+        title = "System Dependency Check",
+        timeout = 15000,
+      })
+    end
+  end,
+})
+
 -- =========================================================================
--- Personal settings, keymaps, and <leader>r Python runner
+-- 5. Personal settings, keymaps, and <leader>r Python runner
 -- =========================================================================
 
--- Normal mode: Paste after cursor
-vim.keymap.set("n", "<leader>p", '"+p', { desc = "Paste from system clipboard" })
-
--- Visual mode: Paste over highlighted text
-vim.keymap.set("v", "<leader>p", '"+p', { desc = "Paste from system clipboard" })
-
--- Insert mode: Paste over highlighted text
---vim.keymap.set("i", "<leader>p", '<C-r>+', { desc = "Paste from system clipboard" })
-
-vim.keymap.set("i", "jk", "<C-c>", { desc = "Escape" })
-
-vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "Written" })
-vim.keymap.set("n", "<leader>z", ":e!<CR>", { desc = "Restore" })
-
--- Display line number
 vim.opt.number = true
--- Enable automatic syntax-aware folding via Tree-sitter
+
+-- Strip Windows carriage returns (\r / ^M) when pasting from Windows clipboard in WSL2
+if vim.fn.has("wsl") == 1 then
+  vim.g.clipboard = {
+    name = "WslClipboard",
+    copy = {
+      ["+"] = { "clip.exe" },
+      ["*"] = { "clip.exe" },
+    },
+    paste = {
+      ["+"] = { "powershell.exe", "-NoLogo", "-NoProfile", "-Command", "[Console]::Out.Write(((Get-Clipboard -Raw) -replace [char]13, ''))" },
+      ["*"] = { "powershell.exe", "-NoLogo", "-NoProfile", "-Command", "[Console]::Out.Write(((Get-Clipboard -Raw) -replace [char]13, ''))" },
+    },
+    cache_enabled = 0,
+  }
+end
+
+vim.opt.clipboard = "unnamedplus"
 vim.opt.foldmethod = "expr"
 vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
-vim.opt.foldlevel = 99 -- Open files fully expanded; use zc/zM to fold on demand
--- Share the Windows clipboard
-vim.opt.clipboard = "unnamedplus"
+vim.opt.foldlevel = 99
+vim.opt.sessionoptions = { "buffers", "curdir", "tabpages", "winsize", "help", "globals", "skiprtp" }
 
+-- Keymaps
+vim.keymap.set("i", "jk", "<Esc>", { desc = "Exit Insert mode" })
+vim.keymap.set("n", "<leader>p", '"+p', { desc = "Paste from system clipboard" })
+vim.keymap.set("v", "<leader>p", '"+P', { desc = "Paste without overwriting clipboard" })
+vim.keymap.set("n", "<leader>w", "<cmd>w<CR>", { desc = "Save file" })
+vim.keymap.set("n", "<leader>z", "<cmd>e!<CR>", { desc = "Reload file from disk" })
+
+-- Python runner (<leader>r)
 local run_buf = nil
 vim.keymap.set("n", "<leader>r", function()
+  local file = vim.fn.expand("%:p")
+  if file == "" then
+    vim.notify("Save the file first before running.", vim.log.levels.WARN)
+    return
+  end
+
   vim.cmd("update")
   if run_buf and vim.api.nvim_buf_is_valid(run_buf) then
     vim.api.nvim_buf_delete(run_buf, { force = true })
   end
 
-  local file = vim.fn.expand("%:p")
-
-  -- 1. Create the buffer and bind 'q' BEFORE starting Python
   run_buf = vim.api.nvim_create_buf(false, true)
   vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = run_buf, silent = true })
 
-  -- 2. Open the bottom split and display the buffer
   vim.cmd("botright 12split")
   vim.api.nvim_win_set_buf(0, run_buf)
 
--- 3. Auto-detect .venv or venv upward from the file's directory; fallback to python3
   local file_dir = vim.fn.expand("%:p:h")
   local venv_py = vim.fs.find({ ".venv/bin/python3", "venv/bin/python3" }, {
     upward = true,
     path = file_dir,
   })[1]
 
-  local py_exec = venv_py or "python3"
-  local cmd = { py_exec, file }
+  local cmd = { venv_py or "python3", file }
   if vim.fn.has("nvim-0.11") == 1 then
     vim.fn.jobstart(cmd, { term = true })
   else
     vim.fn.termopen(cmd)
   end
+  vim.bo[run_buf].buflisted = false
 end, { desc = "Run Python file in a fresh split" })
-
 
 -- Auto-save persistence session on every file write (survives terminal force-close)
 vim.api.nvim_create_autocmd("BufWritePost", {
