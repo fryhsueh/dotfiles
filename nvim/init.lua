@@ -115,6 +115,17 @@ require("lazy").setup({
         end
       end,
     },
+		
+{
+  "folke/persistence.nvim",
+  event = "BufReadPre",
+  opts = {},
+  keys = {
+    { "<leader>qs", function() require("persistence").load() end, desc = "Restore Current Dir Session" },
+    { "<leader>qS", function() require("persistence").select() end, desc = "Select Any Saved Session" },
+    { "<leader>ql", function() require("persistence").load({ last = true }) end, desc = "Restore Last Session" },
+  },
+},
   },
   checker = { enabled = false },
 })
@@ -139,6 +150,10 @@ vim.keymap.set("n", "<leader>z", ":e!<CR>", { desc = "Restore" })
 
 -- Display line number
 vim.opt.number = true
+-- Enable automatic syntax-aware folding via Tree-sitter
+vim.opt.foldmethod = "expr"
+vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+vim.opt.foldlevel = 99 -- Open files fully expanded; use zc/zM to fold on demand
 -- Share the Windows clipboard
 vim.opt.clipboard = "unnamedplus"
 
@@ -159,11 +174,28 @@ vim.keymap.set("n", "<leader>r", function()
   vim.cmd("botright 12split")
   vim.api.nvim_win_set_buf(0, run_buf)
 
-  -- 3. Start Python directly inside this buffer
-  local cmd = { "python3", file }
+-- 3. Auto-detect .venv or venv upward from the file's directory; fallback to python3
+  local file_dir = vim.fn.expand("%:p:h")
+  local venv_py = vim.fs.find({ ".venv/bin/python3", "venv/bin/python3" }, {
+    upward = true,
+    path = file_dir,
+  })[1]
+
+  local py_exec = venv_py or "python3"
+  local cmd = { py_exec, file }
   if vim.fn.has("nvim-0.11") == 1 then
     vim.fn.jobstart(cmd, { term = true })
   else
     vim.fn.termopen(cmd)
   end
 end, { desc = "Run Python file in a fresh split" })
+
+
+-- Auto-save persistence session on every file write (survives terminal force-close)
+vim.api.nvim_create_autocmd("BufWritePost", {
+  callback = function()
+    if package.loaded["persistence"] then
+      require("persistence").save()
+    end
+  end,
+})
